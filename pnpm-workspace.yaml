@@ -1,9 +1,6 @@
 packages:
   - packages/*
 
-ignoredBuiltDependencies:
-  - better-sqlite3
-
 minimumReleaseAge: 2880
 
 minimumReleaseAgeExclude:
@@ -22,6 +19,7 @@ onlyBuiltDependencies:
   - '@parcel/watcher'
   - '@scarf/scarf'
   - '@swc/core'
+  - better-sqlite3
   - core-js
   - core-js-pure
   - cpu-features

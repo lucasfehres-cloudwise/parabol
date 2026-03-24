@@ -9,9 +9,14 @@ import {Logger} from '../../packages/server/utils/Logger'
 import '../webpack/utils/dotenv'
 import {pgEnsureExtensions} from './pgEnsureExtensions'
 
+const isSqlite = process.env.DATABASE_DRIVER === 'sqlite'
+
 const migratePG = async () => {
-  Logger.log('🐘 Postgres Migration Started')
-  await pgEnsureExtensions()
+  const dbType = isSqlite ? 'SQLite' : 'Postgres'
+  Logger.log(`🐘 ${dbType} Migration Started`)
+  if (!isSqlite) {
+    await pgEnsureExtensions()
+  }
   // pgm uses a dynamic require statement, which doesn't work with webpack
   // if we ignore that dynamic require, we'd still have to include the migrations directory AND any dependencies it might have
   // by processing through webpack's require.context, we let webpack handle everything
@@ -23,6 +28,10 @@ const migratePG = async () => {
   const collector: Record<string, any> = {}
   context.keys().forEach((relativePath: any) => {
     const {name} = path.parse(relativePath)
+    // When using SQLite, only run the sqliteInit migration and skip PostgreSQL-specific ones
+    if (isSqlite && !name.includes('sqliteInit')) return
+    // When using PostgreSQL, skip the sqliteInit migration
+    if (!isSqlite && name.includes('sqliteInit')) return
     collector[name] = context(relativePath)
   })
   const pg = getKysely()
@@ -46,10 +55,10 @@ const migratePG = async () => {
   })
 
   if (error) {
-    Logger.log('🐘 Postgres Migration Failed')
+    Logger.log(`🐘 ${dbType} Migration Failed`)
     throw error
   } else {
-    Logger.log('🐘 Postgres Migration Complete')
+    Logger.log(`🐘 ${dbType} Migration Complete`)
   }
 }
 
