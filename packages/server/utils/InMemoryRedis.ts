@@ -26,7 +26,6 @@ export default class InMemoryRedis extends EventEmitter {
   }
 
   async set(key: string, value: string, ...args: any[]): Promise<'OK' | null> {
-    this.store.set(key, value)
     // Handle PX (millisecond TTL) and EX (second TTL) and NX (only if not exists)
     let ttlMs: number | undefined
     let nx = false
@@ -74,8 +73,8 @@ export default class InMemoryRedis extends EventEmitter {
 
   async pttl(key: string): Promise<number> {
     if (!this.store.has(key)) return -2
-    if (!this.expiries.has(key)) return -1
-    return 0 // approximate - we can't get remaining time from setTimeout
+    // -1 means the key exists but has no associated expiry
+    return -1
   }
 
   async ttl(key: string): Promise<number> {

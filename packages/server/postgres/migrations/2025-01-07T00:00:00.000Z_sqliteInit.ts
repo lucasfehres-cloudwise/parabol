@@ -462,7 +462,7 @@ CREATE TABLE IF NOT EXISTS "OrganizationUserAudit" (
 
 CREATE TABLE IF NOT EXISTS "PasswordResetRequest" (
     id integer NOT NULL,
-    ip cidr NOT NULL,
+    ip TEXT NOT NULL,
     email TEXT COLLATE NOCASE NOT NULL,
     "time" TEXT DEFAULT (datetime('now')) NOT NULL,
     token TEXT NOT NULL,

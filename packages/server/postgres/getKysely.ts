@@ -1,5 +1,6 @@
 import {Kysely, PostgresDialect, SqliteDialect} from 'kysely'
 import getPg from './getPg'
+import getSqliteDb from './getSqliteDb'
 import type {DB} from './types/pg'
 
 const isSqlite = process.env.DATABASE_DRIVER === 'sqlite'
@@ -7,7 +8,6 @@ const isSqlite = process.env.DATABASE_DRIVER === 'sqlite'
 let kysely: Kysely<DB> | undefined
 
 const makeSqliteKysely = () => {
-  const getSqliteDb = require('./getSqliteDb').default
   return new Kysely<DB>({
     dialect: new SqliteDialect({
       database: getSqliteDb()
