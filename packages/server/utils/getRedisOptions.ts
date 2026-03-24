@@ -49,7 +49,10 @@ const getMode = (tls: ReturnType<typeof getRedisTLS>, password: string | undefin
 
 export const getRedisOptions = () => {
   const {REDIS_PASSWORD, REDIS_URL} = process.env
-  if (!REDIS_URL) throw new Error('Env Var REDIS_URL is not defined')
+  if (!REDIS_URL) {
+    Logger.log('Redis: REDIS_URL is not set, using in-memory store')
+    return {tls: undefined, password: undefined}
+  }
   const password = REDIS_PASSWORD || undefined
   const tls = getRedisTLS()
   const mode = getMode(tls, password)

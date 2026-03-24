@@ -1,12 +1,23 @@
-import {Kysely, PostgresDialect} from 'kysely'
+import {Kysely, PostgresDialect, SqliteDialect} from 'kysely'
 import getPg from './getPg'
 import type {DB} from './types/pg'
 
+const isSqlite = process.env.DATABASE_DRIVER === 'sqlite'
+
 let kysely: Kysely<DB> | undefined
 
-const makeKysely = (schema?: string) => {
+const makeSqliteKysely = () => {
+  const getSqliteDb = require('./getSqliteDb').default
+  return new Kysely<DB>({
+    dialect: new SqliteDialect({
+      database: getSqliteDb()
+    })
+  })
+}
+
+const makePostgresKysely = (schema?: string) => {
   const nextPg = getPg(schema)
-  nextPg.on('poolChange' as any, () => makeKysely(schema))
+  nextPg.on('poolChange' as any, () => makePostgresKysely(schema))
   return new Kysely<DB>({
     dialect: new PostgresDialect({
       pool: nextPg
@@ -22,7 +33,7 @@ const makeKysely = (schema?: string) => {
 
 const getKysely = (schema?: string) => {
   if (!kysely) {
-    kysely = makeKysely(schema)
+    kysely = isSqlite ? makeSqliteKysely() : makePostgresKysely(schema)
   }
   return kysely
 }

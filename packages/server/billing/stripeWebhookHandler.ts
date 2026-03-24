@@ -112,6 +112,10 @@ const splitType = (type = '') => {
 }
 
 const stripeWebhookHandler = uWSAsyncHandler(async (res: HttpResponse, req: HttpRequest) => {
+  if (process.env.BILLING_ENABLED !== 'true') {
+    res.writeStatus('200').end()
+    return
+  }
   const stripeSignature = req.getHeader('stripe-signature')
   const parser = (buffer: Buffer) => buffer.toString()
   const str = (await parseBody({res, parser})) as string | null

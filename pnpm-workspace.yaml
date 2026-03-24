@@ -1,6 +1,11 @@
 packages:
   - packages/*
+
+ignoredBuiltDependencies:
+  - better-sqlite3
+
 minimumReleaseAge: 2880
+
 minimumReleaseAgeExclude:
   - nest-graphql-endpoint
   - '@tiptap/*'
@@ -8,6 +13,7 @@ minimumReleaseAgeExclude:
   - fast-xml-builder
   - path-expression-matcher
   - strnum
+
 onlyBuiltDependencies:
   - '@datadog/native-appsec'
   - '@datadog/native-iast-taint-tracking'
