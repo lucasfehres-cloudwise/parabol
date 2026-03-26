@@ -90,6 +90,9 @@ jobs:
           retention-days: 7
 
       - name: Docker build smoke test
+        env:
+          HEALTH_CHECK_RETRIES: 30
+          HEALTH_CHECK_INTERVAL: 2
         run: |
           docker build -f docker/stacks/simple-vm/Dockerfile -t parabol-simple-vm .
           docker run -d --name parabol-test \
@@ -103,17 +106,18 @@ jobs:
             -e MAIL_PROVIDER=debug \
             parabol-simple-vm
           echo "Waiting for container to start..."
-          for i in $(seq 1 30); do
+          for i in $(seq 1 $HEALTH_CHECK_RETRIES); do
             if curl -sf http://localhost:3001/health > /dev/null 2>&1; then
               echo "✅ Health check passed!"
               docker logs parabol-test 2>&1 | tail -20
               docker stop parabol-test
               exit 0
             fi
-            echo "  Attempt $i/30..."
-            sleep 2
+            echo "  Attempt $i/$HEALTH_CHECK_RETRIES..."
+            sleep $HEALTH_CHECK_INTERVAL
           done
-          echo "❌ Health check failed after 60 seconds"
+          TIMEOUT=$((HEALTH_CHECK_RETRIES * HEALTH_CHECK_INTERVAL))
+          echo "❌ Health check failed after ${TIMEOUT} seconds"
           docker logs parabol-test 2>&1 | tail -50
           docker stop parabol-test
           exit 1
