@@ -12,6 +12,8 @@ import standaloneMigrations from './standaloneMigrations'
 
 const PROJECT_ROOT = getProjectRoot()
 
+const isSqlite = process.env.DATABASE_DRIVER === 'sqlite'
+
 const storePersistedQueries = async () => {
   Logger.log('🔗 QueryMap Persistence Started')
   const hashes = Object.keys(queryMap)
@@ -19,7 +21,7 @@ const storePersistedQueries = async () => {
   const records = hashes.map((hash) => ({
     id: hash,
     query: queryMap[hash as keyof typeof queryMap],
-    createdAt: now
+    createdAt: isSqlite ? now.toISOString() : now
   }))
 
   const pg = getKysely()

@@ -82,7 +82,8 @@ module.exports = (config) => {
         ...nodeExternals({
           allowlist: [/parabol-client/, /parabol-server/, /@dicebear/, 'node:crypto']
         }),
-        sharp: 'commonjs sharp'
+        sharp: 'commonjs sharp',
+        'better-sqlite3': 'commonjs better-sqlite3'
       }
     ].filter(Boolean),
     optimization: {
