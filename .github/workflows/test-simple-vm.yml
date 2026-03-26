@@ -1,0 +1,119 @@
+name: Test Simple VM
+on:
+  push:
+    branches-ignore:
+      - "release-please--**"
+      - "release/v**"
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  PARABOL_BUILD_ENV_PATH: docker/images/parabol-ubi/environments/pipeline-simple
+jobs:
+  test-simple-vm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: "read"
+      id-token: "write"
+    # No external services needed — SQLite + in-memory Redis
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version-file: package.json
+          cache: "pnpm"
+
+      - name: Setup environment variables
+        run: |
+          ACTION_VERSION=$(grep '"version":' package.json | cut -d\" -f4)
+          echo ACTION_VERSION=$ACTION_VERSION >> $GITHUB_ENV
+
+          NODE_VERSION=$(jq -r -j '.engines.node|ltrimstr("^")' package.json)
+          echo NODE_VERSION=$NODE_VERSION >> $GITHUB_ENV
+
+      - name: Get cached node modules
+        id: cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            **/node_modules
+          key: node_modules-${{ runner.arch }}-${{ env.NODE_VERSION }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install node_modules
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          git config --global url."https://github.com/enahum/redux-offline.git".insteadOf git@github.com:enahum/redux-offline.git
+          pnpm install --frozen-lockfile
+
+      - name: Setup .env for SQLite
+        run: cp ${{ env.PARABOL_BUILD_ENV_PATH }} ./.env
+
+      - name: Run SQLite migrations
+        run: pnpm kysely migrate:latest
+
+      - name: Build for testing
+        run: pnpm build
+
+      - name: Run Predeploy for Testing
+        run: pnpm predeploy
+
+      - name: Start testing server in background
+        uses: JarvusInnovations/background-action@v1
+        with:
+          run: |
+            pnpm start &
+          wait-on: |
+            http://localhost:3000/graphql
+
+      - name: Run server tests
+        run: pnpm test:server --reporters=default --reporters=jest-junit
+        env:
+          NODE_TLS_REJECT_UNAUTHORIZED: 0
+          JEST_JUNIT_OUTPUT_DIR: ./test-results/junit/server
+
+      - name: Run client tests
+        run: pnpm test:client --reporters=default --reporters=jest-junit
+        env:
+          JEST_JUNIT_OUTPUT_DIR: ./test-results/junit/client
+
+      - name: Store Artifacts from Failed Tests
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-simple-vm
+          path: ./test-results/
+          retention-days: 7
+
+      - name: Docker build smoke test
+        run: |
+          docker build -f docker/stacks/simple-vm/Dockerfile -t parabol-simple-vm .
+          docker run -d --name parabol-test \
+            -p 3001:3000 \
+            -e SERVER_SECRET=test-secret \
+            -e HOST=localhost \
+            -e PORT=3000 \
+            -e PROTO=http \
+            -e SERVER_ID=1 \
+            -e FILE_STORE_PROVIDER=local \
+            -e MAIL_PROVIDER=debug \
+            parabol-simple-vm
+          echo "Waiting for container to start..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3001/health > /dev/null 2>&1; then
+              echo "✅ Health check passed!"
+              docker logs parabol-test 2>&1 | tail -20
+              docker stop parabol-test
+              exit 0
+            fi
+            echo "  Attempt $i/30..."
+            sleep 2
+          done
+          echo "❌ Health check failed after 60 seconds"
+          docker logs parabol-test 2>&1 | tail -50
+          docker stop parabol-test
+          exit 1

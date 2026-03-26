@@ -326,8 +326,16 @@ export const getUserOrgs = async (userId: string) => {
   return user.data.user.organizations as [{id: string}, ...{id: string}[]]
 }
 
+const isSqlite = process.env.DATABASE_DRIVER === 'sqlite'
+
 export const createPGTables = async (...tables: string[]) => {
   const pg = getKysely()
+  if (isSqlite) {
+    // SQLite doesn't support CREATE TABLE ... (LIKE ...) syntax.
+    // Tables are already created by the migration, so just truncate.
+    await truncatePGTables(...tables)
+    return
+  }
   await Promise.all(
     tables.map(async (table) => {
       return sql`
@@ -341,6 +349,14 @@ export const createPGTables = async (...tables: string[]) => {
 
 export const truncatePGTables = async (...tables: string[]) => {
   const pg = getKysely()
+  if (isSqlite) {
+    await Promise.all(
+      tables.map(async (table) => {
+        return sql`DELETE FROM ${sql.table(table)}`.execute(pg)
+      })
+    )
+    return
+  }
   await Promise.all(
     tables.map(async (table) => {
       return sql`TRUNCATE TABLE ${sql.table(table)} CASCADE`.execute(pg)
