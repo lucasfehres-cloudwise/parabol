@@ -1035,7 +1035,7 @@ CREATE TABLE IF NOT EXISTS "JiraExport" (
 export async function up(db: Kysely<any>): Promise<void> {
   if (!isSqlite) return
   // Check if already initialized
-  const tables = await sql<{name: string}>\`SELECT name FROM sqlite_master WHERE type='table' AND name='User'\`.execute(db)
+  const tables = await sql<{name: string}>`SELECT name FROM sqlite_master WHERE type='table' AND name='User'`.execute(db)
   if (tables.rows.length > 0) return
 
   // Execute SQLite schema
@@ -1047,8 +1047,8 @@ export async function up(db: Kysely<any>): Promise<void> {
 
 export async function down(db: Kysely<any>): Promise<void> {
   // Drop all tables
-  const tables = await sql<{name: string}>\`SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_migration%'\`.execute(db)
+  const tables = await sql<{name: string}>`SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_migration%'`.execute(db)
   for (const row of tables.rows) {
-    await sql.raw(\`DROP TABLE IF EXISTS "${row.name}"\`).execute(db)
+    await sql.raw(`DROP TABLE IF EXISTS "${row.name}"`).execute(db)
   }
 }
