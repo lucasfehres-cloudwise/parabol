@@ -1,34 +1,71 @@
 import {EventEmitter} from 'events'
 import {Logger} from './Logger'
 
+/** Shared backing stores so that duplicated instances share state and pub/sub. */
+interface SharedState {
+  store: Map<string, string>
+  expiries: Map<string, NodeJS.Timeout>
+  listStore: Map<string, string[]>
+  /** Global message bus shared across duplicates */
+  bus: EventEmitter
+}
+
 /**
  * In-memory Redis replacement for single-process deployments.
  * Implements the subset of the ioredis API used by Parabol.
  * Used when REDIS_URL is not configured.
  */
 export default class InMemoryRedis extends EventEmitter {
-  private store = new Map<string, string>()
-  private expiries = new Map<string, NodeJS.Timeout>()
-  private listStore = new Map<string, string[]>()
+  private store: Map<string, string>
+  private expiries: Map<string, NodeJS.Timeout>
+  private listStore: Map<string, string[]>
+  /** Shared bus so publish/subscribe work across duplicates */
+  private bus: EventEmitter
+  private subscribedChannels = new Set<string>()
   status = 'ready'
 
-  constructor(connectionName?: string) {
+  constructor(connectionNameOrShared?: string | SharedState) {
     super()
-    if (connectionName) {
-      Logger.log(`InMemoryRedis: created in-memory store for "${connectionName}"`)
+    if (typeof connectionNameOrShared === 'object') {
+      // Duplicated instance – share backing stores & bus
+      const shared = connectionNameOrShared
+      this.store = shared.store
+      this.expiries = shared.expiries
+      this.listStore = shared.listStore
+      this.bus = shared.bus
+    } else {
+      this.store = new Map()
+      this.expiries = new Map()
+      this.listStore = new Map()
+      this.bus = new EventEmitter()
+      this.bus.setMaxListeners(100)
+      if (connectionNameOrShared) {
+        Logger.log(`InMemoryRedis: created in-memory store for "${connectionNameOrShared}"`)
+      }
     }
     // Emit ready event async to match ioredis behavior
     setTimeout(() => this.emit('ready'), 0)
+  }
+
+  /** Creates a new InMemoryRedis that shares the same underlying stores (ioredis compat). */
+  duplicate(): InMemoryRedis {
+    return new InMemoryRedis({
+      store: this.store,
+      expiries: this.expiries,
+      listStore: this.listStore,
+      bus: this.bus
+    })
   }
 
   async get(key: string): Promise<string | null> {
     return this.store.get(key) ?? null
   }
 
-  async set(key: string, value: string, ...args: any[]): Promise<'OK' | null> {
-    // Handle PX (millisecond TTL) and EX (second TTL) and NX (only if not exists)
+  async set(key: string, value: string, ...args: any[]): Promise<'OK' | string | null> {
+    // Handle PX (millisecond TTL) and EX (second TTL), NX (only if not exists), GET (return old value)
     let ttlMs: number | undefined
     let nx = false
+    let returnOld = false
     for (let i = 0; i < args.length; i++) {
       const arg = typeof args[i] === 'string' ? args[i].toUpperCase() : args[i]
       if (arg === 'PX' && args[i + 1] !== undefined) {
@@ -39,10 +76,13 @@ export default class InMemoryRedis extends EventEmitter {
         i++
       } else if (arg === 'NX') {
         nx = true
+      } else if (arg === 'GET') {
+        returnOld = true
       }
     }
+    const oldValue = this.store.get(key) ?? null
     if (nx && this.store.has(key)) {
-      return null
+      return returnOld ? oldValue : null
     }
     this.store.set(key, value)
     if (ttlMs !== undefined) {
@@ -55,7 +95,7 @@ export default class InMemoryRedis extends EventEmitter {
         }, ttlMs)
       )
     }
-    return 'OK'
+    return returnOld ? oldValue : 'OK'
   }
 
   async del(...keys: string[]): Promise<number> {
@@ -156,17 +196,32 @@ export default class InMemoryRedis extends EventEmitter {
     return (this.listStore.get(key) || []).length
   }
 
-  // Pub/Sub methods (delegated to EventEmitter)
+  // Pub/Sub methods (use shared bus so duplicates can communicate)
   async subscribe(...channels: string[]): Promise<number> {
-    return channels.length
+    for (const ch of channels) {
+      if (!this.subscribedChannels.has(ch)) {
+        this.subscribedChannels.add(ch)
+        const handler = (message: Buffer) => {
+          this.emit('message', ch, message.toString())
+          this.emit('messageBuffer', Buffer.from(ch), message)
+        }
+        this.bus.on(`ch:${ch}`, handler)
+      }
+    }
+    return this.subscribedChannels.size
   }
 
-  async unsubscribe(..._channels: string[]): Promise<number> {
-    return 0
+  async unsubscribe(...channels: string[]): Promise<number> {
+    for (const ch of channels) {
+      this.subscribedChannels.delete(ch)
+      this.bus.removeAllListeners(`ch:${ch}`)
+    }
+    return this.subscribedChannels.size
   }
 
-  async publish(channel: string, message: string): Promise<number> {
-    this.emit('message', channel, message)
+  async publish(channel: string, message: string | Buffer): Promise<number> {
+    const buf = Buffer.isBuffer(message) ? message : Buffer.from(message)
+    this.bus.emit(`ch:${channel}`, buf)
     return 1
   }
 
@@ -207,7 +262,7 @@ export default class InMemoryRedis extends EventEmitter {
     return 'OK'
   }
 
-  async disconnect(): void {
+  async disconnect(): Promise<void> {
     this.cleanup()
   }
 
