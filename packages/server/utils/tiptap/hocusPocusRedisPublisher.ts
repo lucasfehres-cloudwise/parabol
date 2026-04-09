@@ -9,17 +9,18 @@ import {SubscriptionChannel} from '../../../client/types/constEnums'
 import {CipherId} from '../CipherId'
 import publish from '../publish'
 import type {PublicPageNotificationPayload} from '../publishPageNotification'
+import getRedis from '../getRedis'
 import RedisInstance from '../RedisInstance'
 
 export class RedisPublisher implements Extension {
   priority = 1001
 
-  sub: RedisInstance
+  sub: ReturnType<typeof getRedis>
 
   documentConnections = new Map<string, Document>()
 
   public constructor() {
-    this.sub = new RedisInstance('publicPage_sub')
+    this.sub = process.env.REDIS_URL ? new RedisInstance('publicPage_sub') : getRedis()
     this.sub.on('messageBuffer', (channel, message) => {
       const document = this.documentConnections.get(channel.toString())
       if (!document) {

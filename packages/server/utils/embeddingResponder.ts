@@ -1,4 +1,5 @@
 import {unpack} from 'msgpackr'
+import getRedis from './getRedis'
 import RedisInstance from './RedisInstance'
 
 type UserQueryEmbeddingResponse = {
@@ -6,11 +7,11 @@ type UserQueryEmbeddingResponse = {
   requestId: number
 }
 class EmbeddingResponder {
-  private sub: RedisInstance
+  private sub: ReturnType<typeof getRedis>
   private pending = new Map<number, (data: any) => void>()
 
   constructor() {
-    this.sub = new RedisInstance('EmbeddingDispatcher_sub')
+    this.sub = process.env.REDIS_URL ? new RedisInstance('EmbeddingDispatcher_sub') : getRedis()
     const channelName = `userQueryEmbedding:${process.env.SERVER_ID}`
     this.sub.subscribe(channelName)
     this.sub.on('messageBuffer', (_channel, message) => {

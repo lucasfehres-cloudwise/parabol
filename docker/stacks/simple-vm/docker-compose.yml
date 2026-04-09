@@ -1,0 +1,41 @@
+# Parabol - Simple Single-VM Deployment
+# This docker-compose runs Parabol with SQLite and in-memory pub/sub.
+# No PostgreSQL or Redis required - ideal for single-tenant, low-resource VMs.
+#
+# Usage:
+#   1. Build the app first:  pnpm build
+#   2. Then run:  docker compose -f docker/stacks/simple-vm/docker-compose.yml up -d
+#
+# Requires: .env.simple file in the project root (copy from .env.simple template)
+
+services:
+  parabol:
+    build:
+      context: ../../../
+      dockerfile: docker/stacks/simple-vm/Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_DRIVER=sqlite
+      - SQLITE_DB_PATH=/app/data/parabol.sqlite
+      - BILLING_ENABLED=false
+      - NODE_ENV=production
+      - HOST=localhost
+      - PORT=3000
+      - PROTO=http
+      - SERVER_SECRET=${SERVER_SECRET:-change-me-to-a-random-string}
+      - SERVER_ID=1
+      - FILE_STORE_PROVIDER=local
+      - MAIL_PROVIDER=debug
+    volumes:
+      - parabol-data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  parabol-data:

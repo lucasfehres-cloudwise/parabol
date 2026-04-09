@@ -81,9 +81,11 @@ module.exports = (config) => {
       !noDeps && {
         ...nodeExternals({
           allowlist: [/parabol-client/, /parabol-server/, /@dicebear/, 'node:crypto']
-        }),
-        sharp: 'commonjs sharp'
-      }
+        })
+      },
+      // better-sqlite3 must always be external because it uses native bindings
+      // that must be resolved relative to node_modules, not the webpack output
+      {'better-sqlite3': 'commonjs better-sqlite3'}
     ].filter(Boolean),
     optimization: {
       // When Node exits with an uncaughtException it prints the callstack, which is the line that caused the error.

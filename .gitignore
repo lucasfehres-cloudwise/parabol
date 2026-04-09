@@ -41,3 +41,7 @@ webpack-assets.json
 **/data
 backups/
 tsconfig.tsbuildinfo
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite-journal

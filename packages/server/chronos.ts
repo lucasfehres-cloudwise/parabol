@@ -19,6 +19,7 @@ import {CronJob} from 'cron'
 import {LeaderRunner} from './LeaderRunner'
 import {callGQL} from './utils/callGQL'
 import {Logger} from './utils/Logger'
+import getRedis from './utils/getRedis'
 import RedisInstance from './utils/RedisInstance'
 
 interface PossibleJob {
@@ -162,7 +163,9 @@ const chronos = (leaderRunner: LeaderRunner) => {
 const startChronos = () => {
   if (!__PRODUCTION__) return () => {}
 
-  const redis = new RedisInstance(`chronosLock_${SERVER_ID}`)
+  const redis = process.env.REDIS_URL
+    ? new RedisInstance(`chronosLock_${SERVER_ID}`)
+    : (getRedis() as any)
   const leaderRunner = new LeaderRunner(redis, 'chronos', 20_000)
   chronos(leaderRunner)
   return () => {
